@@ -1,69 +1,59 @@
-
-OpenTelemetry Collector Configuration
+# OpenTelemetry Collector Configuration
 
 receivers:
-
-Receives traces via gRPC on port 4317
-
-otlp:
-protocols:
-grpc:
-http:
+  # Receives traces via gRPC on port 4317
+  otlp:
+    protocols:
+      grpc:
+      http:
 
 processors:
-
-Batches spans before sending to exporters
-
-batch:
-timeout: 1s
-send_batch_size: 100
+  # Batches spans before sending to exporters
+  batch:
+    timeout: 1s
+    send_batch_size: 100
 
 exporters:
+  # 1. Export to Loki (for trace->log correlation)
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+    # This adds trace_id to the log labels
+    attributes:
+      resource:
+        "trace_id": "traceID"
+      record:
+        "trace_id": "traceID"
+        "span_id": "spanID"
 
-1. Export to Loki (for trace->log correlation)
+  # 2. Export to Tempo (the main trace storage)
+  otlp/tempo:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
 
-loki:
-endpoint: "http://loki:3100/loki/api/v1/push"
-# This adds trace_id to the log labels
-attributes:
-resource:
-"trace_id": "traceID"
-record:
-"trace_id": "traceID"
-"span_id": "spanID"
+  # 3. Export to logging (for debugging the collector itself)
+  logging:
+    loglevel: debug
 
-2. Export to Tempo (the main trace storage)
-
-otlp/tempo:
-endpoint: "tempo:4317"
-tls:
-insecure: true
-
-3. Export to logging (for debugging the collector itself)
-
-logging:
-loglevel: debug
-
-4. Expose internal collector metrics for Prometheus
-
-prometheus:
-endpoint: "0.0.0.0:8888"
-namespace: otel_collector
+  # 4. Expose internal collector metrics for Prometheus
+  prometheus:
+    endpoint: "0.0.0.0:8888"
+    namespace: otel_collector
 
 service:
-pipelines:
-traces:
-receivers: [otlp]
-processors: [batch]
-exporters: [logging, otlp/tempo, loki]
-metrics:
-receivers: [otlp]
-processors: [batch]
-exporters: [logging, prometheus]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging, otlp/tempo, loki]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging, prometheus]
 
-Enable the pprof and zpages extensions for debugging
-
+# Enable the pprof and zpages extensions for debugging
 extensions: [pprof, zpages]
+
 telemetry:
-metrics:
-address: 0.0.0.0:8888
+  metrics:
+    address: 0.0.0.0:8888

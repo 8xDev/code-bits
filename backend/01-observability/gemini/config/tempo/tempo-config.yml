@@ -1,48 +1,43 @@
-
-Minimal Tempo config for local development
+# Minimal Tempo config for local development
 
 server:
-http_listen_port: 3200
+  http_listen_port: 3200
 
 distributor:
-receivers:
-otlp:
-protocols:
-grpc:
-endpoint: 0.0.0.0:4317
-http:
-endpoint: 0.0.0.0:4318
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
 
-Use local filesystem storage
-
+# Use local filesystem storage
 storage:
-trace:
-backend: local
-local:
-path: /var/tempo/traces
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/traces
 
-Ingester uses a ring for coordination
-
+# Ingester uses a ring for coordination
 ingester:
-lifecycler:
-ring:
-kvstore:
-store: inmemory
-replication_factor: 1
-final_sleep: 0s
-max_block_duration: 5m
+  lifecycler:
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+    max_block_duration: 5m
 
-Compactor cleans up old blocks
-
+# Compactor cleans up old blocks
 compactor:
-compaction:
-block_retention: 1h # Keep traces for 1 hour
+  compaction:
+    block_retention: 1h # Keep traces for 1 hour
 
-Enable metrics generation
-
+# Enable metrics generation
 metrics_generator:
-storage:
-path: /var/tempo/metrics_generator
-ring:
-kvstore:
-store: inmemory
+  storage:
+    path: /var/tempo/metrics_generator
+  ring:
+    kvstore:
+      store: inmemory
