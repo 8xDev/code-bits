@@ -1,0 +1,381 @@
+
+{
+"__inputs": [],
+"__requires": [],
+"annotations": {
+"list": [
+{
+"builtIn": 1,
+"datasource": {
+"type": "grafana",
+"uid": "-- Grafana --"
+},
+"enable": true,
+"hide": true,
+"iconColor": "rgba(0, 211, 255, 1)",
+"name": "Annotations & Alerts",
+"type": "dashboard"
+}
+]
+},
+"editable": true,
+"fiscalYearStartMonth": 0,
+"graphTooltip": 0,
+"id": 1,
+"links": [],
+"liveNow": false,
+"panels": [
+{
+"type": "row",
+"title": "HTTP Metrics",
+"id": 1,
+"gridPos": {
+"h": 1,
+"w": 24,
+"x": 0,
+"y": 0
+},
+"collapsed": false
+},
+{
+"id": 2,
+"title": "HTTP Request Rate (5m)",
+"type": "timeseries",
+"datasource": {
+"type": "prometheus",
+"uid": "prometheus"
+},
+"targets": [
+{
+"expr": "sum(rate(app_http_requests_total{job="go-app"}[5m])) by (status)",
+"legendFormat": "status: {{status}}",
+"refId": "A"
+}
+],
+"gridPos": {
+"h": 8,
+"w": 8,
+"x": 0,
+"y": 1
+},
+"options": {
+"tooltip": {
+"mode": "multi"
+},
+"legend": {
+"displayMode": "list",
+"placement": "bottom",
+"showLegend": true
+}
+},
+"fieldConfig": {
+"defaults": {
+"color": {
+"mode": "palette-classic"
+},
+"custom": {
+"axisLabel": "",
+"axisPlacement": "auto",
+"barAlignment": 0,
+"drawStyle": "line",
+"fillOpacity": 10,
+"gradientMode": "opacity",
+"hideFrom": {
+"legend": false,
+"tooltip": false,
+"viz": false
+},
+"lineInterpolation": "linear",
+"lineWidth": 1,
+"pointSize": 5,
+"scaleDistribution": {
+"type": "linear"
+},
+"showPoints": "auto",
+"spanNulls": false,
+"stacking": {
+"group": "A",
+"mode": "normal"
+},
+"thresholdsStyle": {
+"mode": "off"
+}
+},
+"mappings": [],
+"thresholds": {
+"mode": "absolute",
+"steps": [
+{
+"color": "green",
+"value": null
+},
+{
+"color": "red",
+"value": 80
+}
+]
+},
+"unit": "reqps"
+},
+"overrides": []
+}
+},
+{
+"id": 3,
+"title": "HTTP P95 Latency (5m)",
+"type": "timeseries",
+"datasource": {
+"type": "prometheus",
+"uid": "prometheus"
+},
+"targets": [
+{
+"expr": "histogram_quantile(0.95, sum(rate(app_http_request_duration_seconds_bucket{job="go-app"}[5m])) by (le, path))",
+"legendFormat": "{{path}}",
+"refId": "A"
+}
+],
+"gridPos": {
+"h": 8,
+"w": 8,
+"x": 8,
+"y": 1
+},
+"options": {
+"tooltip": {
+"mode": "multi"
+},
+"legend": {
+"displayMode": "list",
+"placement": "bottom",
+"showLegend": true
+}
+},
+"fieldConfig": {
+"defaults": {
+"unit": "s",
+"color": {
+"mode": "palette-classic"
+}
+}
+}
+},
+{
+"id": 4,
+"title": "HTTP Error Rate (5m)",
+"type": "timeseries",
+"datasource": {
+"type": "prometheus",
+"uid": "prometheus"
+},
+"targets": [
+{
+"expr": "(sum(rate(app_http_requests_total{job="go-app", status=~"5.."}[5m])) / sum(rate(app_http_requests_total{job="go-app"}[5m]))) * 100",
+"legendFormat": "5xx Error Rate",
+"refId": "A"
+}
+],
+"gridPos": {
+"h": 8,
+"w": 8,
+"x": 16,
+"y": 1
+},
+"options": {
+"tooltip": {
+"mode": "multi"
+},
+"legend": {
+"displayMode": "list",
+"placement": "bottom",
+"showLegend": true
+}
+},
+"fieldConfig": {
+"defaults": {
+"unit": "percent",
+"color": {
+"mode": "thresholds"
+},
+"thresholds": {
+"mode": "absolute",
+"steps": [
+{ "color": "green", "value": null },
+{ "color": "orange", "value": 2 },
+{ "color": "red", "value": 5 }
+]
+}
+}
+}
+},
+{
+"type": "row",
+"title": "Rate Limiting",
+"id": 5,
+"gridPos": {
+"h": 1,
+"w": 24,
+"x": 0,
+"y": 9
+},
+"collapsed": false
+},
+{
+"id": 6,
+"title": "Allowed vs Blocked Requests (1m rate)",
+"type": "timeseries",
+"datasource": {
+"type": "prometheus",
+"uid": "prometheus"
+},
+"targets": [
+{
+"expr": "sum(rate(app_rate_limiter_requests_total[1m]))",
+"legendFormat": "Allowed",
+"refId": "A"
+},
+{
+"expr": "sum(rate(app_rate_limiter_blocked_total[1m]))",
+"legendFormat": "Blocked",
+"refId": "B"
+}
+],
+"gridPos": {
+"h": 8,
+"w": 12,
+"x": 0,
+"y": 10
+},
+"options": {
+"tooltip": {
+"mode": "multi"
+},
+"legend": {
+"displayMode": "list",
+"placement": "bottom",
+"showLegend": true
+}
+},
+"fieldConfig": {
+"defaults": {
+"unit": "reqps",
+"custom": {
+"fillOpacity": 20,
+"drawStyle": "bar"
+}
+},
+"overrides": [
+{
+"matcher": { "byName": "Blocked" },
+"properties": [
+{ "id": "color", "value": "red" }
+]
+}
+]
+}
+},
+{
+"id": 7,
+"title": "Top 5 Blocked IPs (5m rate)",
+"type": "table",
+"datasource": {
+"type": "prometheus",
+"uid": "prometheus"
+},
+"targets": [
+{
+"expr": "topk(5, sum(rate(app_rate_limiter_blocked_total[5m])) by (client_ip))",
+"legendFormat": "{{client_ip}}",
+"refId": "A",
+"format": "table",
+"instant": true
+}
+],
+"gridPos": {
+"h": 8,
+"w": 12,
+"x": 12,
+"y": 10
+}
+},
+{
+"type": "row",
+"title": "Logs & Traces",
+"id": 8,
+"gridPos": {
+"h": 1,
+"w": 24,
+"x": 0,
+"y": 18
+},
+"collapsed": false
+},
+{
+"id": 9,
+"title": "Application Logs",
+"type": "logs",
+"datasource": {
+"type": "loki",
+"uid": "loki"
+},
+"targets": [
+{
+"expr": "{job="go-app"}",
+"refId": "A"
+}
+],
+"gridPos": {
+"h": 10,
+"w": 12,
+"x": 0,
+"y": 19
+},
+"options": {
+"showLabels": true,
+"showTime": true,
+"enableLogDetails": true,
+"sortOrder": "Descending"
+}
+},
+{
+"id": 10,
+"title": "Recent Traces",
+"type": "traces",
+"datasource": {
+"type": "tempo",
+"uid": "tempo"
+},
+"targets": [
+{
+"refId": "A",
+"datasource": "tempo",
+"queryType": "search",
+"serviceName": "go-app"
+}
+],
+"gridPos": {
+"h": 10,
+"w": 12,
+"x": 12,
+"y": 19
+}
+}
+],
+"refresh": "10s",
+"schemaVersion": 38,
+"style": "dark",
+"tags": [],
+"templating": {
+"list": []
+},
+"time": {
+"from": "now-15m",
+"to": "now"
+},
+"timepicker": {},
+"timezone": "browser",
+"title": "Go App Observability",
+"uid": "go-app-dashboard",
+"version": 1,
+"weekStart": ""
+}

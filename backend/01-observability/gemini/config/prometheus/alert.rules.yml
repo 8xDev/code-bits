@@ -1,0 +1,33 @@
+
+groups:
+
+name: go-app-alerts
+rules:
+
+Alert for high 5xx error rate
+
+alert: HighErrorRate
+expr: |
+(
+sum(rate(app_http_requests_total{status=~"5.."}[5m]))
+/
+sum(rate(app_http_requests_total[5m]))
+) > 0.05
+for: 1m # Fire if rate is > 5% for 1 minute
+labels:
+severity: warning
+annotations:
+summary: "High HTTP 5xx error rate on {{ $labels.job }}"
+description: "More than 5% of requests to {{ $labels.job }} are failing with 5xx errors (current value: {{ $value | humanize }}%)."
+
+Alert for excessive rate limiting
+
+alert: HighRateLimitBlocking
+expr: |
+sum(rate(app_rate_limiter_blocked_total[2m])) > 1
+for: 2m # Fire if more than 1 request/sec is blocked for 2 minutes
+labels:
+severity: critical
+annotations:
+summary: "High rate of blocked requests on {{ $labels.job }}"
+description: "{{ $labels.job }} is blocking more than 1 request per second (current value: {{ $value | humanize }} req/s). This could be a DDoS or a misbehaving client."

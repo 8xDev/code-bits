@@ -1,0 +1,17 @@
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'default-receiver'
+  group_by: ['alertname', 'job']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+
+receivers:
+  - name: 'default-receiver'
+    # In a real setup, you'd configure email, Slack, PagerDuty, etc. here.
+    # For this demo, we just use a webhook that goes nowhere.
+    webhook_configs:
+      - url: 'http://localhost:5001/' # Dummy URL for demo

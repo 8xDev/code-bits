@@ -1,0 +1,29 @@
+{
+  "title": "Tasks Service Overview",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "HTTP Requests (per path)",
+      "targets": [
+        { "expr": "sum by (path) (rate(http_requests_total[1m]))" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Rate Limiter: Requests vs Blocked",
+      "targets": [
+        { "expr": "rate(rate_limiter_requests_total[1m])", "legendFormat": "requests" },
+        { "expr": "rate(rate_limiter_blocked_total[1m])", "legendFormat": "blocked" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "HTTP Latency (seconds)",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(http_request_latency_seconds_bucket[1m])) by (le))" }
+      ]
+    }
+  ],
+  "schemaVersion": 36,
+  "version": 1
+}

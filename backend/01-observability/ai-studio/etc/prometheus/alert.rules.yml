@@ -1,0 +1,27 @@
+
+groups:
+  - name: service_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: >
+          sum(rate(http_requests_total{code=~"5.."}[1m])) by (job)
+          /
+          sum(rate(http_requests_total[1m])) by (job)
+          > 0.05
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.job }}"
+          description: "{{ $labels.job }} is experiencing a high rate of 5xx errors ({{ $value | humanize }}%)."
+
+      - alert: HighRequestLatency
+        expr: >
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+          > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p95 request latency on {{ $labels.job }}"
+          description: "The 95th percentile request latency for {{ $labels.job }} is over 0.5s (current value: {{ $value | humanize }}s)."
