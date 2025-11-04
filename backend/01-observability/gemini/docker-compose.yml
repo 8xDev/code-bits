@@ -1,198 +1,184 @@
-
-version: '3.8'
-
 services:
+  # ----------------------------------------
+  # Application Stack
+  # ----------------------------------------
 
-----------------------------------------
+  go-app:
+    build:
+      context: ./go-app
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}" # App port
+      - "8081:8081" # Internal metrics port
+    environment:
+      - APP_PORT=${APP_PORT:-8080}
+      - METRICS_PORT=8081
+      - POSTGRES_DSN=${POSTGRES_DSN:-postgres://app_user:app_pass@postgres:5432/app_db?sslmode=disable}
+      - REDIS_ADDR=${REDIS_ADDR:-redis:6379}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
+      - OTEL_SERVICE_NAME=go-app
+    depends_on:
+      - postgres
+      - redis
+      - otel-collector
+      - loki
+    logging:
+      driver: loki
+      options:
+        loki-url: "http://loki:3100/loki/api/v1/push"
+        loki-external-labels: "job=go-app,instance={{.Name}}"
+    networks:
+      - observability-net
 
-Application Stack
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-app_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-app_pass}
+      - POSTGRES_DB=${POSTGRES_DB:-app_db}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-app_user} -d ${POSTGRES_DB:-app_db}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - observability-net
 
-----------------------------------------
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - observability-net
 
-go-app:
-build:
-context: ./go-app
-ports:
-- "${APP_PORT:-8080}:${APP_PORT:-8080}" # App port
-- "8081:8081" # Internal metrics port
-environment:
-- APP_PORT=${APP_PORT:-8080}
+  # ----------------------------------------
+  # Observability Stack
+  # ----------------------------------------
 
-METRICS_PORT=8081
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./config/prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - go-app
+      - pg_exporter
+      - redis_exporter
+      - loki
+      - tempo
+      - otel-collector
+    networks:
+      - observability-net
 
-POSTGRES_DSN=${POSTGRES\_DSN:-postgres://app\_user:app\_pass@postgres:5432/app\_db?sslmode=disable}
-\- REDIS\_ADDR=${REDIS_ADDR:-redis:6379}
-- OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-- OTEL_SERVICE_NAME=go-app
-depends_on:
-- postgres
-- redis
-- otel-collector
-- loki
-# Send logs directly to Loki
-logging:
-driver: loki
-options:
-loki-url: "http://loki:3100/loki/api/v1/push"
-loki-external-labels: "job=go-app,instance={{.Name}}"
-networks:
-- observability-net
+  pg_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.12.0
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-app_pass}@postgres:5432/${POSTGRES_DB:-app_db}?sslmode=disable
+    depends_on:
+      - postgres
+    ports:
+      - "9187:9187"
+    networks:
+      - observability-net
 
-postgres:
-image: postgres:15
-environment:
-- POSTGRES_USER=${POSTGRES_USER:-app_user}
+  redis_exporter:
+    image: oliver006/redis_exporter:v1.44.0
+    environment:
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - redis
+    ports:
+      - "9121:9121"
+    networks:
+      - observability-net
 
-POSTGRES_PASSWORD=${POSTGRES\_PASSWORD:-app\_pass}
-\- POSTGRES\_DB=${POSTGRES_DB:-app_db}
-volumes:
-- postgres-data:/var/lib/postgresql/data
-# Run initial migration script
-- ./migrations:/docker-entrypoint-initdb.d
-ports:
-- "5432:5432"
-healthcheck:
-test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app_user} -d ${POSTGRES_DB:-app_db}"]
-interval: 10s
-timeout: 5s
-retries: 5
-networks:
-- observability-net
+  loki:
+    image: grafana/loki:2.9.0
+    command: -config.file=/etc/loki/loki-config.yml
+    volumes:
+      - ./config/loki:/etc/loki
+      - loki-data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - observability-net
 
-redis:
-image: redis:7
-ports:
-- "6379:6379"
-volumes:
-- redis-data:/data
-healthcheck:
-test: ["CMD", "redis-cli", "ping"]
-interval: 10s
-timeout: 5s
-retries: 5
-networks:
-- observability-net
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.85.0
+    command: [--config=/etc/otel-collector-config.yml]
+    volumes:
+      - ./config/otel-collector:/etc
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8888:8888" # Prometheus metrics
+    depends_on:
+      - loki
+      - tempo
+    networks:
+      - observability-net
 
-----------------------------------------
+  tempo:
+    image: grafana/tempo:2.2.0
+    command: [-config.file=/etc/tempo.yaml]
+    volumes:
+      - tempo-data:/var/tempo
+      - ./config/tempo/tempo-config.yml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+    networks:
+      - observability-net
 
-Observability Stack
-
-----------------------------------------
-
-prometheus:
-image: prom/prometheus:v2.47.0
-command:
-- '--config.file=/etc/prometheus/prometheus.yml'
-- '--storage.tsdb.path=/prometheus'
-- '--web.console.libraries=/usr/share/prometheus/console_libraries'
-- '--web.console.templates=/usr/share/prometheus/consoles'
-- '--web.enable-lifecycle' # Allows hot reloads
-volumes:
-- ./config/prometheus:/etc/prometheus
-- prometheus-data:/prometheus
-ports:
-- "9090:9090"
-depends_on:
-- go-app
-- pg_exporter
-- redis_exporter
-- loki
-- tempo
-- otel-collector
-networks:
-- observability-net
-
-pg_exporter:
-image: prometheuscommunity/postgres-exporter:v0.12.0
-environment:
-# This DSN must match the postgres service credentials
-- DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-app_user}:${POSTGRES_PASSWORD:-app_pass}@postgres:5432/${POSTGRES_DB:-app_db}?sslmode=disable
-depends_on:
-- postgres
-ports:
-- "9187:9187"
-networks:
-- observability-net
-
-redis_exporter:
-image: oliver006/redis_exporter:v1.44.0
-environment:
-- REDIS_ADDR=redis:6379
-depends_on:
-- redis
-ports:
-- "9121:9121"
-networks:
-- observability-net
-
-loki:
-image: grafana/loki:2.9.0
-command: -config.file=/etc/loki/loki-config.yml
-volumes:
-- ./config/loki:/etc/loki
-- loki-data:/loki
-ports:
-- "3100:3100"
-networks:
-- observability-net
-
-otel-collector:
-image: otel/opentelemetry-collector-contrib:0.85.0
-command: [--config=/etc/otel-collector-config.yml]
-volumes:
-- ./config/otel-collector:/etc
-ports:
-- "4317:4317" # OTLP gRPC
-- "4318:4318" # OTLP HTTP
-- "8888:8888" # Prometheus metrics
-depends_on:
-- loki
-- tempo
-networks:
-- observability-net
-
-tempo:
-image: grafana/tempo:2.2.0
-command: [-config.file=/etc/tempo.yaml]
-volumes:
-# Use a minimal config. For production, you'd use S3, GCS, etc.
-- "tempo-data:/var/tempo"
-- type: bind
-source: ./config/tempo/tempo-config.yml
-target: /etc/tempo.yaml
-ports:
-- "3200:3200" # Tempo UI & API
-- "4317:4317" # OTLP gRPC (forwarded from otel-collector)
-networks:
-- observability-net
-
-grafana:
-image: grafana/grafana:10.1.1
-environment:
-- GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-
-GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-- GF_PATHS_PROVISIONING=/etc/grafana/provisioning
-volumes:
-- ./config/grafana/provisioning:/etc/grafana/provisioning
-- grafana-data:/var/lib/grafana
-ports:
-- "3000:3000"
-depends_on:
-- prometheus
-- loki
-- tempo
-networks:
-- observability-net
+  grafana:
+    image: grafana/grafana:10.1.1
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    volumes:
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks:
+      - observability-net
 
 volumes:
-postgres-data:
-redis-data:
-prometheus-data:
-loki-data:
-grafana-data:
-tempo-data:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  loki-data:
+  grafana-data:
+  tempo-data:
 
 networks:
-observability-net:
-driver: bridge
+  observability-net:
+    driver: bridge

@@ -10,7 +10,7 @@ import (
 	"github.com/example/obs-tasks/internal/handlers"
 	"github.com/example/obs-tasks/internal/middleware"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -39,7 +39,7 @@ func main() {
 
 	// DB
 	dsn := getenv("DATABASE_URL", "postgres://postgres:postgres@postgres:5432/tasks_db?sslmode=disable")
-	sql.Register("pgx", stdlib.GetDefaultDriver())
+	// sql.Register("pgx", stdlib.GetDefaultDriver())
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		log.Fatal().Err(err).Msg("opening database")
