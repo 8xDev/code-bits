@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device‑width, initial‑scale=1.0">
+  <title>Upload via Presigned POST</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg space-y-6">
+    <h1 class="text-2xl font-bold text-center">Upload File Using Presigned POST</h1>
+
+    <label class="block font-medium text-gray-700">Paste JSON response:</label>
+    <textarea id="jsonInput" rows="8" class="block w-full p-2 border border-gray-300 rounded mb-2" placeholder='Paste JSON here…'></textarea>
+
+    <label class="block font-medium text-gray-700">Select file to upload:</label>
+    <input id="fileInput" type="file" class="block w-full mb-4 p-2 border border-gray-300 rounded" />
+
+    <button id="uploadBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 rounded disabled:opacity-50" disabled>
+      Upload
+    </button>
+
+    <p id="status" class="mt-4 text-center text-gray-600"></p>
+  </div>
+
+  <script>
+    const jsonInput = document.getElementById('jsonInput');
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const statusEl = document.getElementById('status');
+
+    let presigned = null;
+    let selectedFile = null;
+
+    // enable upload button when JSON + file ready
+    function updateButtonState() {
+      uploadBtn.disabled = !(presigned && selectedFile);
+    }
+
+    // Watch JSON input
+    jsonInput.addEventListener('input', () => {
+      statusEl.textContent = '';
+      try {
+        const obj = JSON.parse(jsonInput.value);
+        // Basic validation
+        if (obj.url && obj.fields && typeof obj.fields === 'object' && obj.method && obj.method.toLowerCase() === 'post') {
+          presigned = obj;
+        } else {
+          presigned = null;
+        }
+      } catch(e) {
+        presigned = null;
+      }
+      updateButtonState();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        selectedFile = e.target.files[0];
+      } else {
+        selectedFile = null;
+      }
+      statusEl.textContent = '';
+      updateButtonState();
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      if (!presigned) {
+        statusEl.textContent = 'Invalid or missing presigned JSON.';
+        return;
+      }
+      if (!selectedFile) {
+        statusEl.textContent = 'No file selected.';
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      statusEl.textContent = 'Uploading…';
+
+      try {
+        const { url, fields } = presigned;
+
+        // Build FormData
+        const form = new FormData();
+        // Append all provided fields
+        Object.keys(fields).forEach(key => {
+          form.append(key, fields[key]);
+        });
+        // Append the file. The “name” should be exactly “file” per AWS docs. :contentReference[oaicite:0]{index=0}
+        form.append('file', selectedFile);
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          body: form
+        });
+
+        if (resp.ok) {
+          statusEl.textContent = 'Upload successful!';
+        } else {
+          const text = await resp.text();
+          statusEl.textContent = `Upload failed: ${resp.status} ${resp.statusText} — ${text}`;
+        }
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Error: ' + err.message;
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

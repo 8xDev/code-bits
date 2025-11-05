@@ -10,7 +10,6 @@ import (
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/minio/minio-go/v7/pkg/encrypt"
 )
 
 // MinioClient wraps the minio client and bucket config.
@@ -49,28 +48,21 @@ func NewMinioClient(endpoint, accessKey, secretKey, bucket, publicBase string) (
 }
 
 // GeneratePresignedPut returns a presigned PUT URL for a single object.
-func (m *MinioClient) GeneratePresignedPut(ctx context.Context, objectKey string, expiry time.Duration, contentType string, useSSE bool) (string, error) {
+func (m *MinioClient) GeneratePresignedPut(ctx context.Context, objectKey string, expiry time.Duration) (string, error) {
 	if m == nil || m.Client == nil {
 		return "", errors.New("minio not configured")
 	}
-	// build request params
-	opts := minio.PutObjectOptions{
-		ContentType: contentType,
-	}
-	if useSSE {
-		// SSE-S3 (server-side encryption with managed keys)
-		opts.ServerSideEncryption = encrypt.NewSSE()
-	}
-	reqParams := make(url.Values)
-	// the SDK's PresignedPutObject ignores PutObjectOptions, so content-type needs to be provided by client on PUT
+
+	// Build base presigned PUT URL
 	u, err := m.Client.PresignedPutObject(ctx, m.Bucket, objectKey, expiry)
 	if err != nil {
 		return "", err
 	}
-	// attach any extra query params if needed
-	if len(reqParams) > 0 {
-		u.RawQuery = reqParams.Encode()
-	}
+
+	// Note: MinIO’s PresignedPutObject doesn’t sign Content-Type or SSE options.
+	// The client uploading must set the Content-Type header manually on PUT.
+	// Server-side encryption (SSE-S3) is automatically applied if bucket policy enforces it.
+
 	return u.String(), nil
 }
 

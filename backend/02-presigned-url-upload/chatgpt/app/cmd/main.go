@@ -13,7 +13,7 @@ import (
 	"github.com/example/posts-presign/internal/storage"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -35,7 +35,7 @@ func main() {
 	allowedOrigins := getenv("CORS_ALLOWED_ORIGINS", "http://localhost:8080")
 
 	// DB
-	sql.Register("pgx", stdlib.GetDefaultDriver())
+	// sql.Register("pgx", stdlib.GetDefaultDriver())
 	db, err := sql.Open("pgx", dbURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("open db")
@@ -74,17 +74,25 @@ func main() {
 	r.Get("/openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "openapi.yaml")
 	})
+	r.Get("/upload.html", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/upload.html")
+	})
 
 	// API routes
 	r.Route("/api", func(r chi.Router) {
 		// Upload initiation (returns presigned POST or PUT info)
-		r.Post("/uploads/init", h.InitUpload)             // -> presigned POST or PUT
+		r.Post("/uploads/init", h.InitUpload) // -> presigned POST or PUT
 		// After client uploads directly to MinIO, create the Post record by referencing object key
-		r.Post("/posts", h.CreatePostFromKey)             // create post (object_key required)
+		r.Post("/posts", h.CreatePostFromKey) // create post (object_key required)
 		r.Get("/posts", h.ListPosts)
 		r.Get("/posts/{id}", h.GetPost)
 		r.Delete("/posts/{id}", h.DeletePost)
 	})
+
+	// **Fallback for everything else** → serves index.html
+	r.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "web/index.html")
+	}))
 
 	addr := ":" + getenv("APP_PORT", "8080")
 	srv := &http.Server{

@@ -10,6 +10,7 @@ RUN CGO_ENABLED=0 go build -o /posts-service ./cmd
 FROM alpine:3.18
 RUN apk add --no-cache ca-certificates
 COPY --from=build /posts-service /posts-service
+COPY --from=build /src/web /web
 WORKDIR /
 EXPOSE 8080
 CMD ["/posts-service"]

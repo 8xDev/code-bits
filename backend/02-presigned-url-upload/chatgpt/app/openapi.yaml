@@ -1,9 +1,9 @@
-openapi: 3.0.3
+openapi: 3.1.3
 info:
   title: Posts Presigned API
   version: "1.0"
 servers:
-  - url: /
+  - url: http://localhost:8080/
 paths:
   /api/uploads/init:
     post:
@@ -14,32 +14,35 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - filename
               properties:
                 filename:
                   type: string
+                  description: Name of the file to upload
                 method:
                   type: string
                   enum: [post, put]
+                  description: Upload method (POST or PUT)
       responses:
-        '200':
-          description: presigned data
-  /api/uploads/multipart/init:
-    post:
-      summary: Initiate multipart upload (returns uploadId + part presigned URLs)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                filename:
-                  type: string
-                parts_count:
-                  type: integer
-      responses:
-        '200':
-          description: multipart init
+        "200":
+          description: Presigned upload info returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  objectKey:
+                    type: string
+                    description: Key of the object to be uploaded
+                  url:
+                    type: string
+                    description: Presigned URL for PUT or POST
+                  formData:
+                    type: object
+                    additionalProperties: true
+                    description: Required form fields for POST uploads
+
   /api/posts:
     post:
       summary: Create a post referencing an already-uploaded object
@@ -49,34 +52,86 @@ paths:
           application/json:
             schema:
               type: object
+              required:
+                - title
+                - object_key
               properties:
-                title: { type: string }
-                description: { type: string }
-                object_key: { type: string }
+                title:
+                  type: string
+                description:
+                  type: string
+                object_key:
+                  type: string
+                  description: Key of the uploaded object in MinIO
       responses:
-        '201':
-          description: created
+        "201":
+          description: Post created successfully
+
     get:
-      summary: List posts
+      summary: List all posts
       responses:
-        '200':
-          description: OK
+        "200":
+          description: List of posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    title:
+                      type: string
+                    description:
+                      type: string
+                    object_key:
+                      type: string
+
   /api/posts/{id}:
     get:
-      summary: Get post by id
+      summary: Get a post by ID
       parameters:
         - in: path
           name: id
           required: true
-          schema: { type: integer }
+          schema:
+            type: integer
       responses:
-        '200': {}
+        "200":
+          description: Post details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  title:
+                    type: string
+                  description:
+                    type: string
+                  object_key:
+                    type: string
+
     delete:
-      summary: Delete post
+      summary: Delete a post by ID
       parameters:
         - in: path
           name: id
           required: true
-          schema: { type: integer }
+          schema:
+            type: integer
       responses:
-        '204': {}
+        "204":
+          description: Post deleted successfully
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+
+security:
+  - ApiKeyAuth: []

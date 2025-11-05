@@ -95,19 +95,13 @@ func (h *Handler) InitUpload(w http.ResponseWriter, r *http.Request) {
 	// generate unique key
 	objKey := uuid.New().String() + ext
 
-	// detect content-type heuristics from extension (not authoritative)
-	contentType := ""
-	if ext != "" {
-		contentType = mimeFromExt(ext)
-	}
-
 	// use SSE on upload (SSE-S3): server-side encryption at rest
 	useSSE := true
 
 	ctx := r.Context()
 	if method == "put" {
 		// presign PUT
-		url, err := h.minio.GeneratePresignedPut(ctx, objKey, 15*time.Minute, contentType, useSSE)
+		url, err := h.minio.GeneratePresignedPut(ctx, objKey, 15*time.Minute)
 		if err != nil {
 			log.Error().Err(err).Msg("presign put")
 			http.Error(w, "failed to create presigned url", http.StatusInternalServerError)
@@ -275,24 +269,4 @@ func jsonResponse(w http.ResponseWriter, v interface{}, code int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
-}
-
-func mimeFromExt(ext string) string {
-	ext = strings.ToLower(ext)
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-	case ".mp4":
-		return "video/mp4"
-	case ".mov":
-		return "video/quicktime"
-	case ".webm":
-		return "video/webm"
-	default:
-		return ""
-	}
 }

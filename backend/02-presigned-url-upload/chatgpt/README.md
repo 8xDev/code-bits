@@ -21,12 +21,14 @@ This project demonstrates direct-to-object-storage (MinIO) presigned uploads (PO
 ## Flow (recommended)
 1. Client calls `POST /api/uploads/init` with `filename` and optionally `method=post|put`.
 2. Server returns presigned POST form data or presigned PUT URL and `objectKey`.
+   - **Important**: For presigned PUT URLs, the client **must include the `Content-Type` header** when uploading.  
+   - SSE-S3 encryption is applied automatically by MinIO bucket policy.
 3. Client uploads directly to MinIO using the returned info.
 4. Client calls `POST /api/posts` with `title`, `description`, and `object_key` to create the DB record (server validates via HeadObject).
 5. MinIO sends event notification to worker (for post-processing) — worker just logs for now.
 
 ## Security & Production notes
-- **API Key**: simple X-API-KEY header for write endpoints. Replace with OAuth/OpenID Connect in production.
+- **API Key**: simple `X-API-KEY` header for write endpoints. Replace with OAuth/OpenID Connect in production.
 - **SSE**: uses SSE-S3 (server side encryption managed by MinIO) to keep objects encrypted at rest.
 - **CORS**: configure allowed origins via `.env`.
 - **Multipart**: implemented init + part presign in a demo-friendly manner — for production consider AWS multipart flow or multipart SDK helpers.
@@ -39,5 +41,6 @@ This project demonstrates direct-to-object-storage (MinIO) presigned uploads (PO
 - The `minio-setup` service attempts to configure a webhook for MinIO in a best-effort manner. Depending on MinIO versions, admin API usage, and security, you may need to manually configure bucket notifications or expand the setup script.
 - The sample worker simply logs events. Expand it to download objects, generate thumbnails, transcode videos, or enqueue work for background processing.
 - SSE-S3 is used for server-side encryption at rest. If you require customer-provided encryption keys (SSE-C) or KMS integration, adapt the MinIO options and key management accordingly.
+- Presigned PUT URLs **do not embed SSE headers**, so encryption is applied by MinIO automatically. The client only needs to set `Content-Type`.
 
 ---
