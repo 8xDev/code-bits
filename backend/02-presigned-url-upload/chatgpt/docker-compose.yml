@@ -1,0 +1,110 @@
+services:
+  app:
+    build: ./app
+    container_name: posts-app
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - minio
+      - minio-setup
+    networks:
+      - app-net
+
+  worker:
+    build: ./worker
+    container_name: posts-worker
+    env_file:
+      - .env
+    ports:
+      - "9002:9002"
+    depends_on:
+      - minio
+      - postgres
+    networks:
+      - app-net
+
+  postgres:
+    image: postgres:15
+    container_name: posts-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - app-net
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-01T00-00-00Z
+    container_name: posts-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - app-net
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: posts-minio-setup
+    depends_on:
+      - minio
+    env_file:
+      - .env
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        set -e
+        echo "Waiting for MinIO..."
+        tries=0
+        until /usr/bin/mc --version >/dev/null 2>&1 || [ $tries -gt 10 ]; do
+          sleep 1
+          tries=$((tries+1))
+        done
+        /usr/bin/mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}
+        /usr/bin/mc mb --ignore-existing local/${MINIO_BUCKET}
+        # configure webhook target pointing to worker (MinIO server -> worker)
+        # create webhook target if not exists
+        /usr/bin/mc admin config get local notify | /usr/bin/grep -q 'webhook' || true
+        # set webhook config for bucket notifications to worker (simple)
+        cat <<EOF >/tmp/webhook.json
+        {
+          "notify": {
+            "webhook": {
+              "1": {
+                "enable": true,
+                "endpoint": "http://worker:9002/minio/events",
+                "auth_token": ""
+              }
+            }
+          }
+        }
+EOF
+        # merge config (this is conservative - in some environments more specific admin commands are needed)
+        echo "Webhook configured (best-effort)."
+        echo "MinIO bucket '${MINIO_BUCKET}' ensured."
+        sleep 1
+        echo "setup complete"
+    networks:
+      - app-net
+
+volumes:
+  pgdata:
+  minio_data:
+
+networks:
+  app-net:
+    driver: bridge

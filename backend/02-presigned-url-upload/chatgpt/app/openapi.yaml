@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: Posts Presigned API
+  version: "1.0"
+servers:
+  - url: /
+paths:
+  /api/uploads/init:
+    post:
+      summary: Get presigned upload info (POST or PUT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                method:
+                  type: string
+                  enum: [post, put]
+      responses:
+        '200':
+          description: presigned data
+  /api/uploads/multipart/init:
+    post:
+      summary: Initiate multipart upload (returns uploadId + part presigned URLs)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                parts_count:
+                  type: integer
+      responses:
+        '200':
+          description: multipart init
+  /api/posts:
+    post:
+      summary: Create a post referencing an already-uploaded object
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                description: { type: string }
+                object_key: { type: string }
+      responses:
+        '201':
+          description: created
+    get:
+      summary: List posts
+      responses:
+        '200':
+          description: OK
+  /api/posts/{id}:
+    get:
+      summary: Get post by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': {}
+    delete:
+      summary: Delete post
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': {}
